@@ -1,0 +1,49 @@
+services:
+  # NOTE on OMNIROUTE_BASE_URL's default: host.docker.internal resolves to
+  # the host machine automatically on Docker Desktop (Windows/Mac). On native
+  # Linux Docker you'd need `extra_hosts: ["host.docker.internal:host-gateway"]`
+  # added below, or just point OMNIROUTE_BASE_URL at the host's real LAN/
+  # loopback-bridge IP instead.
+  nexus:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      OMNIROUTE_BASE_URL: ${OMNIROUTE_BASE_URL:-http://host.docker.internal:8787}
+      OMNIROUTE_API_KEY: ${OMNIROUTE_API_KEY:?set OMNIROUTE_API_KEY in your .env}
+      NEXUS_DEFAULT_MODEL: ${NEXUS_DEFAULT_MODEL:-gpt-4o-mini}
+      NEXUS_FALLBACK_MODEL: ${NEXUS_FALLBACK_MODEL:-}
+      NEXUS_KEYS_FILE: /app/keys.json
+      NEXUS_DB_PATH: /app/data/nexus_quota.sqlite3
+      NEXUS_CACHE_BACKEND: redis
+      NEXUS_REDIS_URL: redis://redis:6379/0
+      NEXUS_CACHE_TTL_SECONDS: ${NEXUS_CACHE_TTL_SECONDS:-600}
+      NEXUS_LOG_LEVEL: ${NEXUS_LOG_LEVEL:-INFO}
+    volumes:
+      - ./keys.json:/app/keys.json:ro
+      - nexus_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  nexus_data:
+  redis_data:
