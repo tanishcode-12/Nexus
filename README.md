@@ -9,8 +9,6 @@
   <img alt="lint" src="https://img.shields.io/badge/lint-ruff-A78BFA">
   <a href="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml/badge.svg"></a>
 
-<p align="center"><em>⚠️ replace <code>YOUR-USERNAME/YOUR-REPO</code> in the CI badge above once this is pushed</em></p>
-
 # 🔀 Nexus
 
 An MCP server backed by **OmniRoute** (your unified LLM gateway), exposing `ask_model`,
