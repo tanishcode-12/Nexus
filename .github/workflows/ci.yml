@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # These use in-process fakes only (no real sockets, no real Flask app,
+      # no subprocess, no real OmniRoute) — the "all mocked, no real
+      # OmniRoute calls in CI" tier from the spec.
+      - name: Unit tests
+        run: >
+          pytest -v
+          tests/test_registry.py
+          tests/test_auth.py
+          tests/test_ratelimit.py
+          tests/test_cache.py
+          tests/test_errors.py
+          tests/test_ask_model_tool.py
+          tests/test_simple_tools.py
+          tests/test_dispatch_stream.py
+          tests/test_core_dispatch.py
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # These exercise real sockets (a local fake-OmniRoute HTTP server bound
+      # to 127.0.0.1), a real Flask test client, and a real stdio_main.py
+      # subprocess — full request lifecycle (auth -> rate limit -> cache ->
+      # execute -> log) through both transports. Nothing here calls the
+      # user's real OmniRoute instance or needs any external network access;
+      # everything is self-contained on localhost.
+      - name: Integration tests
+        run: >
+          pytest -v
+          tests/test_omniroute_client.py
+          tests/test_http_flask.py
+          tests/test_streaming_tools.py
+          tests/test_stdio_e2e.py
+          tests/test_http_wiring.py
