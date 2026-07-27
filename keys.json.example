@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "api_key": "sk-nexus-admin-CHANGE-ME",
+      "scopes": ["admin"]
+    },
+    {
+      "api_key": "sk-nexus-readonly-CHANGE-ME",
+      "scopes": ["model:read"]
+    },
+    {
+      "api_key": "sk-nexus-ci-CHANGE-ME",
+      "scopes": ["model:read", "code:review"],
+      "rate_capacity": 5,
+      "rate_refill_per_sec": 0.2,
+      "daily_quota": 200,
+      "monthly_quota": 2000
+    }
+  ]
+}
