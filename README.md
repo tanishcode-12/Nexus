@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Nexus — an MCP gateway routing stdio and HTTP/SSE through six typed tools into OmniRoute" width="100%">
+  <img src="assets/banner.gif" alt="Nexus — an MCP gateway routing stdio and HTTP/SSE through six typed tools into OmniRoute" width="100%">
 </p>
 
 <p align="center">
