@@ -1,0 +1,10 @@
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "SIM", "ASYNC", "RUF"]
+ignore = [
+    "E501",     # line length is a soft guideline here, not a hard failure
+    "ASYNC240", # flags os.path.* used for trivial path resolution in async
+                # test helpers, not the blocking I/O this rule is meant to catch
+]
