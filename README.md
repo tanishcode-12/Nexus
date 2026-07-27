@@ -7,8 +7,7 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP%2FSSE-38BDF8">
   <img alt="tests" src="https://img.shields.io/badge/tests-93%20passing-2DD4BF">
   <img alt="lint" src="https://img.shields.io/badge/lint-ruff-A78BFA">
-  <a href="https://github.com/YOUR-USERNAME/YOUR-REPO/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/YOUR-USERNAME/YOUR-REPO/actions/workflows/ci.yml/badge.svg"></a>
-</p>
+  <a href="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml/badge.svg"></a>
 
 <p align="center"><em>⚠️ replace <code>YOUR-USERNAME/YOUR-REPO</code> in the CI badge above once this is pushed</em></p>
 
