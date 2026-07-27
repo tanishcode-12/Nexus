@@ -41,6 +41,7 @@ you're deciding whether to trust this in production — read that before you dep
 - [🔍 What's tested vs. untested](#whats-tested-vs-untested)
 
 <a id="architecture"></a>
+
 ## 🏗️ Architecture
 
 ```mermaid
@@ -88,6 +89,7 @@ rate limiting, caching, and logging live in `core.py` and are exercised identica
 which transport a request came in on. Neither adapter contains a single line of tool logic.
 
 <a id="quickstart"></a>
+
 ## 🚀 Quickstart
 
 ```bash
@@ -101,6 +103,7 @@ Edit `.env`: at minimum set `OMNIROUTE_BASE_URL` and `OMNIROUTE_API_KEY` to poin
 OmniRoute instance. Edit `keys.json`: replace the example API keys with real ones.
 
 **🖥️ Run over stdio** (for Claude Desktop — add to its MCP server config):
+
 ```json
 {
   "mcpServers": {
@@ -112,10 +115,12 @@ OmniRoute instance. Edit `keys.json`: replace the example API keys with real one
   }
 }
 ```
+
 (`NEXUS_API_KEY` is how stdio clients authenticate — there's no per-request header concept over
 stdio, so it's one key per configured server entry, set once via env var.)
 
 **🌐 Run over HTTP:**
+
 ```bash
 python http_main.py                       # dev: Flask's built-in server, threaded=True
 # or, for anything resembling production:
@@ -123,6 +128,7 @@ gunicorn --bind 0.0.0.0:8080 --workers 1 --threads 8 --worker-class gthread wsgi
 ```
 
 Then:
+
 ```bash
 curl http://localhost:8080/healthz
 curl http://localhost:8080/v1/tools -H "X-API-Key: sk-nexus-admin-CHANGE-ME"
@@ -135,20 +141,21 @@ curl -X POST http://localhost:8080/v1/tools/call \
 see [🔍 What's tested](#whats-tested-vs-untested) below).
 
 <a id="tool-reference"></a>
+
 ## 🧰 Tool reference
 
 All tools are versioned (`_v1` suffix — see [🔖 Schema versioning](#schema-versioning)) and
 registered via `@tool(...)` in their own file under `tools/`. Adding a tool means dropping in a
 new file; nothing else needs editing.
 
-| Tool | Scope required | Streaming | Description |
-|---|---|:---:|---|
-| `ask_model_v1` | `model:read` | – | Ask one model a prompt. |
-| `compare_models_v1` | `model:read` | – | Ask multiple models the same prompt concurrently; partial failure isn't total failure. |
-| `summarize_text_v1` | `model:read` | – | Summarize text in ≤ `max_words` words (hard-truncated as a safety net if the model overshoots). |
-| `list_available_models_v1` | `model:read` | – | List model ids OmniRoute currently exposes. |
-| `research_chain_v1` | `model:read` | 📡 | Chains research → synthesis; streams the research result back before synthesis starts. |
-| `code_review_v1` | `code:review` | 📡 | Reviews code; for inputs over 40 lines, chunks by line count, reviews + streams each chunk, then streams a final summary. |
+| Tool                       | Scope required | Streaming | Description                                                                                                               |
+| -------------------------- | -------------- | :-------: | ------------------------------------------------------------------------------------------------------------------------- |
+| `ask_model_v1`             | `model:read`   |     –     | Ask one model a prompt.                                                                                                   |
+| `compare_models_v1`        | `model:read`   |     –     | Ask multiple models the same prompt concurrently; partial failure isn't total failure.                                    |
+| `summarize_text_v1`        | `model:read`   |     –     | Summarize text in ≤ `max_words` words (hard-truncated as a safety net if the model overshoots).                           |
+| `list_available_models_v1` | `model:read`   |     –     | List model ids OmniRoute currently exposes.                                                                               |
+| `research_chain_v1`        | `model:read`   |    📡     | Chains research → synthesis; streams the research result back before synthesis starts.                                    |
+| `code_review_v1`           | `code:review`  |    📡     | Reviews code; for inputs over 40 lines, chunks by line count, reviews + streams each chunk, then streams a final summary. |
 
 `code_review_v1` requiring a separate `code:review` scope (rather than `model:read`) is the
 concrete example of scoping from the spec — a read-only key can list models and ask questions,
@@ -158,6 +165,7 @@ Every result includes `"error": true/false`; on error, `"error_type"` and `"mess
 tools yield a sequence of chunks, each with `"partial": true` except the last.
 
 <a id="auth-scoping"></a>
+
 ## 🔐 Auth & scoping
 
 Every request needs an API key: an env var (`NEXUS_API_KEY`) for stdio, an `X-API-Key` header for
@@ -165,14 +173,16 @@ HTTP. Keys map to scopes in `keys.json` (`keys.json.example` shows the format, i
 per-key rate/quota overrides). `"admin"` is a wildcard scope that bypasses all scope checks.
 
 Enforcement happens in exactly **one place**: `NexusServer.dispatch()`/`dispatch_stream()` in
-`core.py`. The Flask adapter's `require_api_key` decorator only checks that a key is *present* and
-*known*, rejecting early with 401 — the actual per-tool scope check happens once, centrally, so
+`core.py`. The Flask adapter's `require_api_key` decorator only checks that a key is _present_ and
+_known_, rejecting early with 401 — the actual per-tool scope check happens once, centrally, so
 it's identical for stdio and HTTP and can't drift between them.
 
 <a id="rate-limiting-quotas"></a>
+
 ## 🚦 Rate limiting & quotas
 
 Two independent layers, checked in order:
+
 1. **Token bucket** (`ratelimit.py: TokenBucketLimiter`) — in-memory, per API key, for
    burst/sustained rate limiting. Configurable capacity + refill rate, globally (`.env`) or
    per-key (`keys.json`).
@@ -188,6 +198,7 @@ Either layer failing returns a structured `rate_limited` error (HTTP 429; stdio 
 > it; a same-microsecond unit test had missed it. Both spots now use explicit `is not None` checks.
 
 <a id="caching"></a>
+
 ## ⚡ Caching
 
 `cache.py` defines an abstract `CacheBackend` (`get`/`set`/`delete`) with two implementations:
@@ -197,6 +208,7 @@ order doesn't matter, only content does. Only `ask_model_v1` is cached (matching
 cache hit logs **zero** token usage/cost, since nothing new was actually spent.
 
 <a id="streaming"></a>
+
 ## 📡 Streaming
 
 Flask/WSGI is synchronous; Nexus's tool handlers are async (they await OmniRoute HTTP calls).
@@ -205,6 +217,7 @@ with its own event loop, relaying each chunk across a `queue.Queue` to the synch
 Flask actually streams out via `Response(generator, mimetype="text/event-stream")`.
 
 <a id="observability"></a>
+
 ## 📊 Observability
 
 Every request logs one structured JSON line (`metrics.py: JsonFormatter`) with timestamp, tool,
@@ -218,6 +231,7 @@ tool, backed by `MetricsRecorder` — testable standalone, no Flask/server requi
 > them in every log line. Fixed, with a regression test that would fail if it regressed.
 
 <a id="graceful-degradation"></a>
+
 ## 🛟 Graceful degradation
 
 `omniroute_client.py` retries failed completions up to `max_retries` (default 2) with exponential
@@ -229,6 +243,7 @@ tool handler itself (proven by `test_unhandled_exception_never_escapes_dispatch`
 a handler that unconditionally raises and confirms it comes back as a clean error, not a crash).
 
 <a id="schema-versioning"></a>
+
 ## 🔖 Schema versioning
 
 Every tool name ends in `_v1` (`ask_model_v1`, not `ask_model`). A future breaking change ships as
@@ -238,6 +253,7 @@ clients calling `ask_model_v1` keep working unchanged. No `_v2` exists yet; this
 pattern for when one's needed, per the spec's explicit ask.
 
 <a id="running-the-load-test"></a>
+
 ## 🧪 Running the load test
 
 ```bash
@@ -256,14 +272,22 @@ mocked), with two keys:
 {
   "total_requests": 200,
   "status_counts": { "200": 200 },
-  "latency_ms": { "min": 6.68, "p50": 13.32, "p95": 692.58, "max": 1474.16, "mean": 87.08 }
+  "latency_ms": {
+    "min": 6.68,
+    "p50": 13.32,
+    "p95": 692.58,
+    "max": 1474.16,
+    "mean": 87.08
+  }
 }
 ```
+
 All 200 succeeded — but note the p95/max latency tail. That's flagged, not buried: it's most
 likely Werkzeug's dev-server threading model and/or SQLite lock contention on the quota-counter
 table under concurrent writes to the same key, not root-caused with profiling. It's a real signal
 that the dev server and SQLite-under-heavy-concurrency both deserve scrutiny before trusting this
 under real load — see [⚖️ Tradeoffs](#design-decisions-tradeoffs) below.
+
 </details>
 
 <details>
@@ -273,26 +297,36 @@ under real load — see [⚖️ Tradeoffs](#design-decisions-tradeoffs) below.
 {
   "total_requests": 200,
   "status_counts": { "429": 195, "200": 5 },
-  "latency_ms": { "min": 14.51, "p50": 53.45, "p95": 59.48, "max": 92.06, "mean": 53.04 }
+  "latency_ms": {
+    "min": 14.51,
+    "p50": 53.45,
+    "p95": 59.48,
+    "max": 92.06,
+    "mean": 53.04
+  }
 }
 ```
+
 Exactly what a 5-token bucket under a fast burst should do: first 5 through, the rest 429'd. ✅
+
 </details>
 
 This is **one process, in-memory rate limiter, SQLite quotas** — see below for what it doesn't
 tell you.
 
 <a id="docker"></a>
+
 ## 🐳 Docker
 
 ```bash
 docker compose up --build
 ```
+
 Runs Nexus (gunicorn, `gthread` worker, per the Dockerfile) + Redis. Set `NEXUS_CACHE_BACKEND=redis`
 (already the compose default) to actually exercise Redis rather than in-memory caching.
 
 > ⚠️ **Verified without Docker itself:** Docker isn't available in the sandbox this was built in, so
-> the actual `docker build`/`docker compose up` cycle has **not** been run. What *has* been
+> the actual `docker build`/`docker compose up` cycle has **not** been run. What _has_ been
 > verified directly: `gunicorn --workers 1 --threads 8 --worker-class gthread wsgi:app` was run for
 > real and hit with real HTTP requests (`/healthz`, `/v1/tools`) — so the command the Dockerfile's
 > `CMD` runs is confirmed correct. (An earlier draft of the `CMD` used
@@ -304,6 +338,7 @@ Runs Nexus (gunicorn, `gthread` worker, per the Dockerfile) + Redis. Set `NEXUS_
 > anything doesn't match what's described here.
 
 <a id="design-decisions-tradeoffs"></a>
+
 ## ⚖️ Design decisions & tradeoffs
 
 **Flask, not the MCP SDK's own HTTP transport.** The MCP Python SDK ships ASGI-based HTTP/SSE
@@ -320,7 +355,7 @@ that an ASGI framework would give for free via native `async for`. It works and 
 it's more moving parts than `async def` + `StreamingResponse` would have been.
 
 **SQLite for rate-limit quotas, not Redis, at this scale.** Fine for one process. Two problems
-appear the moment you run more than one: (1) the in-memory token bucket is *per-process* — with
+appear the moment you run more than one: (1) the in-memory token bucket is _per-process_ — with
 `--workers N > 1`, each gunicorn worker has its own independent bucket, so real enforced capacity
 becomes (configured capacity) × (worker count), not the configured capacity. The Dockerfile pins
 `--workers 1` specifically because of this, with a loud comment — bumping worker count requires
@@ -355,9 +390,11 @@ probably moving off Flask's dev server entirely in favor of gunicorn everywhere,
 dev, to catch concurrency issues earlier instead of first seeing them in a load test.
 
 <a id="whats-tested-vs-untested"></a>
+
 ## 🔍 What's tested vs. untested
 
 ### ✅ Genuinely verified in this sandbox (93 tests, all passing, zero external network dependencies)
+
 - Full auth → scope → rate-limit → cache → execute → log pipeline, both transports
 - stdio: a **real subprocess** running `stdio_main.py`, spoken to over real MCP stdio protocol via
   `ClientSession` — not an in-process function call standing in for the transport
@@ -372,7 +409,8 @@ dev, to catch concurrency issues earlier instead of first seeing them in a load 
 - `gunicorn wsgi:app` under the `gthread` worker class, hit with real HTTP requests
 
 ### 🐛 Real bugs the process caught, fixed, and added regression tests for
-*(listed because you asked for honesty, not because a build log is normally interesting)*
+
+_(listed because you asked for honesty, not because a build log is normally interesting)_
 
 1. `0.0 or default` silently discarding an explicit "no refill" rate-limit override, in two places
 2. `tokens_used`/`cost_estimate` never reaching the structured logs despite being required by spec
@@ -384,6 +422,7 @@ dev, to catch concurrency issues earlier instead of first seeing them in a load 
    assumed) — caught before it ever ran, not after
 
 ### ❌ Cannot be verified from this sandbox — needs your real environment
+
 - Your actual OmniRoute instance. Every test here uses either a pure in-process fake or a small
   real HTTP server standing in for OmniRoute's wire format (assumed OpenAI-compatible-ish
   `/v1/chat/completions` + `/v1/models`) — never your real gateway. If its actual response shape
