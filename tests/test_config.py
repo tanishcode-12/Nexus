@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 
 import config as config_module
-from config import Config, _bool
+from config import _bool
 
 
 def _reload_config():
