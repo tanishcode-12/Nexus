@@ -1,14 +1,21 @@
 """
 code_review_v1 — review a code snippet for bugs, style, and suggestions.
 
-For large snippets, the input is split into line-based chunks; each chunk
-is reviewed and streamed back independently, followed by one final overall
-summary chunk — rather than blocking on a single giant review (Section 6).
+For large snippets, the input is split into chunks; each chunk is reviewed
+and streamed back independently, followed by one final overall summary
+chunk — rather than blocking on a single giant review (Section 6).
 
-Known simplification: chunking is a blind line count, not an AST/
-tree-sitter-aware split on function or class boundaries. A chunk can cut a
-function in half, which costs the model some context. Flagged here rather
-than silently shipped as if it were smarter than it is.
+Chunking is boundary-aware but still line-count-based, not a real AST/
+tree-sitter parse: it targets ~_CHUNK_TARGET_LINES lines per chunk but
+looks for a nearby "safe" cut point first — a blank line, or a line with
+no leading whitespace (a plausible top-level statement/def/class in most
+common code styles) — rather than always slicing at a fixed offset. This
+avoids cutting a function or block in half in the common case without
+needing a real per-language parser. It's still a heuristic, not a
+guarantee: a chunk can never grow past _CHUNK_HARD_CAP_LINES even with no
+boundary in sight, so one long function without blank lines just gets a
+hard cut rather than an unbounded chunk. Flagged here rather than shipped
+as if it were smarter than it is.
 """
 from __future__ import annotations
 
@@ -25,13 +32,62 @@ INPUT_SCHEMA = {
     "required": ["snippet", "language"],
 }
 
-_CHUNK_LINES = 40
+_CHUNK_TARGET_LINES = 40
+# a chunk is never allowed to grow past this, boundary or not
+_CHUNK_HARD_CAP_LINES = 60
 _LARGE_THRESHOLD_LINES = 40
 
 
-def _chunk_lines(snippet: str, chunk_size: int) -> list[str]:
+def _is_boundary(lines: list[str], idx: int) -> bool:
+    """True if starting a new chunk at `idx` is a reasonable cut point: the
+    previous line is blank, or the line at `idx` itself has no leading
+    whitespace (so it's not sitting inside an indented block). Used to
+    avoid slicing through the middle of a function/class body."""
+    if idx <= 0 or idx >= len(lines):
+        return True
+    if lines[idx - 1].strip() == "":
+        return True
+    line = lines[idx]
+    return bool(line) and not line[0].isspace()
+
+
+def _chunk_lines(snippet: str, target_size: int, hard_cap: int) -> list[str]:
+    """Split into chunks of around `target_size` lines each, preferring a
+    boundary (see `_is_boundary`) over a fixed offset. Searches outward
+    from the ideal cut point for the nearest boundary within
+    [target_size // 2, hard_cap] lines of the chunk's start; if none
+    exists in that range (e.g. one long, deeply nested function with no
+    blank lines), forces a cut at `hard_cap` so chunk size stays bounded."""
     lines = snippet.splitlines()
-    chunks = ["\n".join(lines[i : i + chunk_size]) for i in range(0, len(lines), chunk_size)]
+    if not lines:
+        return [snippet]
+
+    chunks: list[str] = []
+    start = 0
+    n = len(lines)
+    while start < n:
+        remaining = n - start
+        if remaining <= target_size:
+            end = n
+        else:
+            ideal = start + target_size
+            limit = min(start + hard_cap, n)
+            min_end = start + target_size // 2
+            end = None
+            max_offset = max(ideal - min_end, limit - ideal)
+            for offset in range(0, max_offset + 1):
+                for cand in (ideal - offset, ideal + offset):
+                    if cand < min_end or cand > limit:
+                        continue
+                    if _is_boundary(lines, cand):
+                        end = cand
+                        break
+                if end is not None:
+                    break
+            if end is None:
+                end = limit  # no boundary found in range: force cut, bounded by hard_cap
+        chunks.append("\n".join(lines[start:end]))
+        start = end
     return chunks or [snippet]
 
 
@@ -44,7 +100,11 @@ def _chunk_lines(snippet: str, chunk_size: int) -> list[str]:
 )
 async def code_review_v1(snippet: str, language: str, ctx: RequestContext):
     line_count = snippet.count("\n") + 1
-    chunks = _chunk_lines(snippet, _CHUNK_LINES) if line_count > _LARGE_THRESHOLD_LINES else [snippet]
+    chunks = (
+        _chunk_lines(snippet, _CHUNK_TARGET_LINES, _CHUNK_HARD_CAP_LINES)
+        if line_count > _LARGE_THRESHOLD_LINES
+        else [snippet]
+    )
     total = len(chunks)
     will_have_summary = total > 1  # a summary phase follows iff we actually chunked
 
