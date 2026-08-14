@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-import importlib
-
-import config as config_module
-from config import _bool
+from config import Config, _bool
 
 
 def _reload_config():
-    """Config's dataclass fields are built from os.environ at import/instantiation
-    time, so tests need a fresh Config() (not the module-level singleton) after
-    changing environment variables."""
-    importlib.reload(config_module)
-    return config_module.Config()
+    """Config's dataclass fields are built from os.environ at instantiation
+    time (via dataclass default_factory), so a fresh Config() picks up
+    monkeypatched env vars without needing to touch the module at all.
+
+    Deliberately NOT using importlib.reload(config_module) here: that
+    replaces the `config` name inside the config module, but every other
+    module that already did `from config import config` (http_main.py,
+    auth.py, ratelimit.py, ...) keeps its own private reference to the old
+    object. Reloading would silently orphan those references for the rest
+    of the test session, breaking any test elsewhere that mutates
+    config_module.config and expects other modules to see it (see
+    test_http_wiring.py's regression test)."""
+    return Config()
 
 
 def test_defaults_when_no_env_vars_set(monkeypatch):
