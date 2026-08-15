@@ -62,6 +62,16 @@ class Config:
     http_host: str = field(default_factory=lambda: os.environ.get("NEXUS_HTTP_HOST", "0.0.0.0"))
     http_port: int = field(default_factory=lambda: int(os.environ.get("NEXUS_HTTP_PORT", "8080")))
 
+    # Declares how many gunicorn worker PROCESSES this deployment runs (i.e.
+    # whatever number follows `--workers` in your gunicorn command / Dockerfile
+    # CMD). Not auto-detected — gunicorn doesn't expose worker count to the
+    # app process before forking, so this has to be told explicitly. Used
+    # only to fail fast at startup if it's inconsistent with the in-memory
+    # token bucket's single-process assumption; see RateLimiter.__init__.
+    worker_count: int = field(
+        default_factory=lambda: int(os.environ.get("NEXUS_WORKER_COUNT", "1"))
+    )
+
     log_level: str = field(default_factory=lambda: os.environ.get("NEXUS_LOG_LEVEL", "INFO"))
 
 

@@ -1,8 +1,10 @@
 """
 Rate limiting & quota tracking (Section 4).
 
-- Per-key token bucket for burst/sustained rate limiting (in-process, in-memory —
-  fine for a single server process; see README for the multi-process caveat).
+- Per-key token bucket for burst/sustained rate limiting (in-process,
+  in-memory — a single-process design; see `RateLimiter.__init__`, which
+  refuses to start if NEXUS_WORKER_COUNT > 1, and the README for the
+  multi-process caveat this guards against).
 - Daily/monthly quota counters persisted in SQLite so they survive restarts.
 """
 from __future__ import annotations
@@ -143,6 +145,21 @@ class RateLimiter:
     (daily/monthly ceiling), reading per-key overrides from AuthStore."""
 
     def __init__(self, config: Config, auth_store: AuthStore | None = None):
+        if config.worker_count > 1:
+            raise RuntimeError(
+                f"NEXUS_WORKER_COUNT is set to {config.worker_count}, but "
+                "TokenBucketLimiter is pure in-memory, per-process state. "
+                "With more than one gunicorn worker, each worker keeps its "
+                "own independent bucket, so the real enforced rate becomes "
+                "(configured capacity) x (worker count) — not the capacity "
+                "you configured. This is a silent correctness bug, not a "
+                "performance one, so Nexus refuses to start rather than "
+                "enforce the wrong limit. Fix: run with --workers 1 (and "
+                "set NEXUS_WORKER_COUNT=1, the default), or implement a "
+                "Redis-backed token bucket (atomic Lua script, not "
+                "read-then-write) before scaling past one worker — see "
+                "README 'Design decisions & tradeoffs'."
+            )
         self.config = config
         self.auth_store = auth_store
         self.bucket = TokenBucketLimiter(
