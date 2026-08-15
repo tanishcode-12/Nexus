@@ -74,3 +74,20 @@ def test_ratelimiter_falls_back_to_config_defaults_for_unlisted_key(test_config)
     # test_config sets capacity=5, so 5 calls should succeed for an unknown key
     for _ in range(5):
         limiter.check("no-override-key")
+
+
+def test_ratelimiter_refuses_to_start_with_multiple_workers(test_config):
+    # TokenBucketLimiter is pure in-memory, per-process state: with more than
+    # one gunicorn worker, each worker gets its own independent bucket, so
+    # the real enforced rate silently becomes capacity x worker_count. This
+    # must fail loudly at startup rather than quietly under-enforce limits.
+    test_config.worker_count = 2
+    with pytest.raises(RuntimeError, match="NEXUS_WORKER_COUNT"):
+        RateLimiter(test_config)
+
+
+def test_ratelimiter_starts_fine_with_default_worker_count(test_config):
+    # worker_count defaults to 1 (Config()'s default) — the common case must
+    # not be affected by the new guard.
+    assert test_config.worker_count == 1
+    RateLimiter(test_config, AuthStore(records=[]))  # should not raise
