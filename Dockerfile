@@ -26,6 +26,7 @@ USER nexus
 ENV NEXUS_HTTP_HOST=0.0.0.0 \
     NEXUS_HTTP_PORT=8080 \
     NEXUS_DB_PATH=/app/data/nexus_quota.sqlite3 \
+    NEXUS_WORKER_COUNT=1 \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8080
@@ -40,9 +41,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 # including in-flight SSE streams, behind one connection at a time).
 #
 # --workers: each worker is a SEPARATE PROCESS with its own in-memory rate
-# limiter state (see README) — 1 here for that exact reason, so rate limits
-# are enforced correctly out of the box. Scaling beyond 1 worker/process
-# requires moving the token bucket to Redis first; don't just bump this
-# number without doing that (flagged loudly in README too).
+# limiter state (see README) — 1 here for that exact reason. NEXUS_WORKER_COUNT
+# above must match this number; RateLimiter.__init__ refuses to start if it's
+# > 1, so this isn't just a comment anyone can silently drift past — bumping
+# --workers without also moving the token bucket to Redis will fail loudly at
+# container startup instead of quietly under-enforcing rate limits.
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", \
      "--worker-class", "gthread", "--timeout", "120", "wsgi:app"]
