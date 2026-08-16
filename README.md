@@ -355,22 +355,27 @@ it's more moving parts than `async def` + `StreamingResponse` would have been.
 **SQLite for rate-limit quotas, not Redis, at this scale.** Fine for one process. Two problems
 appear the moment you run more than one: (1) the in-memory token bucket is _per-process_ — with
 `--workers N > 1`, each gunicorn worker has its own independent bucket, so real enforced capacity
-becomes (configured capacity) × (worker count), not the configured capacity. The Dockerfile pins
-`--workers 1` specifically because of this, with a loud comment — bumping worker count requires
-moving the bucket to Redis first (an atomic Lua-script token bucket, not just swapping the cache
-backend). (2) SQLite handles concurrent writers, but not gracefully at high concurrency — the
-p95/max latency tail in the load test above is a live piece of evidence for this, not a
-hypothetical.
+becomes (configured capacity) × (worker count), not the configured capacity. This is no longer
+just a Dockerfile comment: `RateLimiter.__init__` reads `NEXUS_WORKER_COUNT` and **refuses to
+start** (raises `RuntimeError`) if it's set above `1`, so a config drift here fails loudly at
+startup instead of silently over-granting rate limits — see `ratelimit.py` and
+`tests/test_ratelimit.py`. Bumping worker count for real still requires moving the bucket to
+Redis first (an atomic Lua-script token bucket, not just swapping the cache backend); the guard
+just makes sure nobody does that by accident. (2) SQLite handles concurrent writers, but not
+gracefully at high concurrency — the p95/max latency tail in the load test above is a live piece
+of evidence for this, not a hypothetical.
 
 **In-memory cache vs. Redis.** Same story: in-memory is per-process and doesn't survive a
 restart. `RedisCache` exists and is unit-tested (via `fakeredis`, standing in for a real Redis
 server) but has never touched an actual Redis instance from this sandbox (no network egress to
 one). If you flip `NEXUS_CACHE_BACKEND=redis`, test that specifically before relying on it.
 
-**`code_review_v1`'s chunking is a blind line count**, not an AST/tree-sitter-aware split on
-function/class boundaries. A chunk can cut a function in half mid-body, costing the model some
-context on that chunk. Flagged in the tool's own docstring, not silently shipped as smarter than
-it is.
+**`code_review_v1`'s chunking is boundary-aware but still not a real AST/tree-sitter parse.** It
+targets a line-count budget per chunk but looks for a nearby blank line or unindented line first
+and cuts there, rather than always slicing at a fixed offset — so the common case (functions
+separated by blank lines) no longer gets cut in half. It's still a heuristic: one long function
+with no blank lines and no dedent just gets a hard cut once a chunk hits its cap, rather than an
+unbounded chunk. Flagged in the tool's own docstring, not silently shipped as smarter than it is.
 
 **`research_chain`/`code_review` "streaming" means progressive results between chained calls**,
 not token-by-token streaming of a single completion. This was a deliberate reading of the spec
@@ -418,6 +423,12 @@ _(listed because you asked for honesty, not because a build log is normally inte
    wiring; every Flask integration test built its app via a factory that bypasses that code path
 4. An invalid gunicorn `CMD` (verified against gunicorn's actual source before shipping, not
    assumed) — caught before it ever ran, not after
+5. `test_config.py`'s `importlib.reload(config_module)` replaced the module's `config` singleton
+   with a new object, but other modules (`http_main.py`, `auth.py`, ...) had already captured their
+   own reference via `from config import config` — so the reload silently orphaned those
+   references for the rest of the pytest session, breaking `test_http_wiring.py`'s regression test
+   for issue #3 above whenever the full suite ran in file order (passed standalone, failed in the
+   full run). Fixed by constructing `Config()` directly instead of reloading the module.
 
 ### ❌ Cannot be verified from this sandbox — needs your real environment
 
@@ -428,7 +439,11 @@ _(listed because you asked for honesty, not because a build log is normally inte
 - A real Redis instance — `RedisCache` is unit-tested against `fakeredis` only.
 - Multi-process concurrency (`gunicorn --workers > 1`, or any horizontally-scaled deployment) —
   the in-memory rate limiter's per-process-state problem, described above, is a design-level
-  certainty, not something additional local testing could confirm or refute.
+  certainty, not something additional local testing could confirm or refute. As of the
+  `NEXUS_WORKER_COUNT` startup guard, this scenario can no longer happen silently: Nexus refuses
+  to boot rather than run with the wrong effective rate limit. What's still unverified is only the
+  Redis-backed token bucket that would let you actually scale past one worker — that code doesn't
+  exist yet.
 - The actual `docker build` / `docker compose up` cycle — Docker isn't available in this sandbox.
 - The root cause of the p95/max latency tail under concurrent load — observed and reported
   honestly, not diagnosed with profiling.
