@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="python" src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP%2FSSE-38BDF8">
-  <img alt="tests" src="https://img.shields.io/badge/tests-93%20passing-2DD4BF">
+  <img alt="tests" src="https://img.shields.io/badge/tests-104%20passing-2DD4BF">
   <img alt="lint" src="https://img.shields.io/badge/lint-ruff-A78BFA">
   <a href="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tanishcode-12/Nexus/actions/workflows/ci.yml/badge.svg"></a>
 
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8080/v1/tools/call \
   -d '{"tool": "ask_model_v1", "arguments": {"prompt": "hello"}}'
 ```
 
-**🧪 Run tests:** `pytest` (93 tests, ~4s, entirely self-contained — no external network needed,
+**🧪 Run tests:** `pytest` (104 tests, ~4.5s, entirely self-contained — no external network needed,
 see [🔍 What's tested](#whats-tested-vs-untested) below).
 
 <a id="tool-reference"></a>
@@ -396,7 +396,7 @@ dev, to catch concurrency issues earlier instead of first seeing them in a load 
 
 ## 🔍 What's tested vs. untested
 
-### ✅ Genuinely verified in this sandbox (93 tests, all passing, zero external network dependencies)
+### ✅ Genuinely verified in this sandbox (104 tests, all passing, zero external network dependencies)
 
 - Full auth → scope → rate-limit → cache → execute → log pipeline, both transports
 - stdio: a **real subprocess** running `stdio_main.py`, spoken to over real MCP stdio protocol via
